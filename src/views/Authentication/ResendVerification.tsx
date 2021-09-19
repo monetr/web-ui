@@ -9,20 +9,21 @@ import { Alert, AlertTitle } from "@material-ui/lab";
 import verifyEmailAddress from "util/verifyEmailAddress";
 import Logo from 'assets';
 import request from "shared/util/request";
+import { getReCAPTCHAKey } from "shared/bootstrap/selectors";
 
 interface ResendValues {
   email: string | null;
 }
 
 interface WithConnectionPropTypes extends RouteComponentProps {
-
+  requireCaptcha: boolean;
 }
 
 interface State {
   loading: boolean;
   error: string | null;
-  emailAddress: string | null;
   verification: string | null;
+  done: boolean;
 }
 
 class ResendVerification extends Component<WithConnectionPropTypes, State> {
@@ -30,19 +31,9 @@ class ResendVerification extends Component<WithConnectionPropTypes, State> {
   state = {
     loading: false,
     error: null,
-    emailAddress: null,
     verification: null,
+    done: false,
   };
-
-  componentDidMount() {
-    const { state: routeState } = this.props.location;
-
-    if (routeState && routeState['emailAddress']) {
-      this.setState({
-        emailAddress: routeState['emailAddress'],
-      });
-    }
-  }
 
   resendVerification = (emailAddress: string): Promise<void> => {
     this.setState({
@@ -51,8 +42,16 @@ class ResendVerification extends Component<WithConnectionPropTypes, State> {
 
     return request().post('/authentication/verify/resend', {
       'email': emailAddress,
+      'captcha': this.state.verification,
     })
-      .then()
+      .then(() => this.setState({
+        done: true,
+      }))
+      .catch(error => {
+        this.setState({
+          error: error?.response?.data?.error || 'Failed to resend verification link',
+        })
+      })
   };
 
   validateInput = (values: ResendValues): Partial<ResendValues> | null => {
@@ -90,8 +89,9 @@ class ResendVerification extends Component<WithConnectionPropTypes, State> {
   };
 
   render() {
+    const { state: routeState } = this.props.location;
     const initialValues: ResendValues = {
-      email: null,
+      email: (routeState && routeState['emailAddress']) || null,
     }
 
     return (
@@ -119,6 +119,21 @@ class ResendVerification extends Component<WithConnectionPropTypes, State> {
                     <img src={ Logo } className="w-1/3"/>
                   </div>
                   <div className="w-full">
+                    <div className="w-full pb-2.5">
+                      { routeState &&
+                      <p className="text-center">
+                        It looks like your email address has not been verified. Do you want to resend the email
+                        verification link?
+                      </p>
+                      }
+
+                      { !routeState &&
+                      <p className="text-center">
+                        If your email verification link has expired, or you never got one. You can enter your email
+                        address below and another verification link will be sent to you.
+                      </p>
+                      }
+                    </div>
                     <div className="w-full pb-2.5">
                       <TextField
                         autoComplete="username"
@@ -148,7 +163,7 @@ class ResendVerification extends Component<WithConnectionPropTypes, State> {
                     <Button
                       className="w-full"
                       color="primary"
-                      disabled={ isSubmitting || !values.email }
+                      disabled={ isSubmitting || !values.email || (this.props.requireCaptcha && !this.state.verification) }
                       onClick={ submitForm }
                       type="submit"
                       variant="contained"
@@ -174,6 +189,8 @@ class ResendVerification extends Component<WithConnectionPropTypes, State> {
 }
 
 export default connect(
-  state => ({}),
+  state => ({
+    requireCaptcha: !!getReCAPTCHAKey(state),
+  }),
   {},
 )(withRouter(ResendVerification));

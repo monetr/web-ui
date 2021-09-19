@@ -25,7 +25,7 @@ class VerifyEmail extends Component<WithConnectionPropTypes, any> {
       'token': token,
     })
       .then(result => {
-
+        
       })
       .catch(error => {
         this.errorRedirect(error?.response?.data?.error || 'Failed to verify email address.');
